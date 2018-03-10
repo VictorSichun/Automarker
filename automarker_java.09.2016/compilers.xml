@@ -10,7 +10,6 @@
 		<Output>.class</Output>
 		<Extension>.java</Extension>
 		<Run>java -Xmx512M -classpath basename.parent problem</Run>
-		<TimeFactor>1.1</TimeFactor>
 	</Java>
 	<C>
 		<!-- <Compile>gcc -std=c99 -O2 -lm basename -o basename.parent/problem.exe</Compile> -->
@@ -18,7 +17,6 @@
 		<Output>.exe</Output>
 		<Extension>.c</Extension>
 		<Run>basename.parent/problem.exe</Run>
-		<TimeFactor>1.0</TimeFactor>
 	</C>
 	<CPP>
 		<!-- <Compile>g++ -std=c++11 -O2 basename -o basename.parent/problem.exe</Compile> -->
@@ -26,55 +24,47 @@
 		<Output>.exe</Output>
 		<Extension>.cpp</Extension>
 		<Run>basename.parent/problem.exe</Run>
-		<TimeFactor>1.0</TimeFactor>
 	</CPP>
 	<Python2>
 		<Compile>pypy -V basename </Compile>
 		<Output></Output>
 		<Extension>.py2</Extension>
 		<Run>pypy basename.parent/problem.py2</Run>
-		<TimeFactor>1.4</TimeFactor>
 	</Python2>
 	<PyPy3>
 		<Compile>pypy3 -V basename </Compile>
 		<Output></Output>
 		<Extension>.py</Extension>
 		<Run>pypy3 basename.parent/problem.py</Run>
-		<TimeFactor>1.5</TimeFactor>
 	</PyPy3>
 	<Python3>
-		<Compile>python3 -V basename </Compile>
+		<Compile>python3.5 -V basename </Compile>
 		<Output></Output>
 		<Extension>.py3</Extension>
 		<Run>python3.5 basename.parent/problem.py3</Run>
-		<TimeFactor>1.4</TimeFactor>
 	</Python3>
 	<Sage>
 		<Compile>sage -v basename.parent/problem.sage</Compile>
 		<Output>.py</Output>
 		<Extension>.sage</Extension>
 		<Run>sage basename.parent/problem.sage</Run>
-		<TimeFactor>1.5</TimeFactor>
 	</Sage>
 	<Mono>
 		<Compile>mcs -warn:0 -pkg:dotnet basename</Compile>
 		<Output>.exe</Output>
 		<Extension>.cs</Extension>
 		<Run>mono basename.parent/problem.exe</Run>
-		<TimeFactor>1.3</TimeFactor>
 	</Mono>
 	<Ruby>
 		<Compile>ruby -c basename</Compile>
 		<Output></Output>
 		<Extension>.rb</Extension>
 		<Run>ruby basename.parent/problem.rb</Run>
-		<TimeFactor>1.5</TimeFactor>
 	</Ruby>
 	<Fsharp>
 		<Compile>fsharpc basename</Compile>
 		<Output>.exe</Output>
 		<Extension>.fs</Extension>
 		<Run>mono basename.parent/problem.exe</Run>
-		<TimeFactor>1.3</TimeFactor>
 	</Fsharp>
 </Compilers>

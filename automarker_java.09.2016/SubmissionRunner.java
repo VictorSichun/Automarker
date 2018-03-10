@@ -68,7 +68,6 @@ public class SubmissionRunner implements AutoCloseable, Runnable
 	private boolean startProcess()
 	{
 		ProcessBuilder pb = new ProcessBuilder(command.split(" "));
-		System.out.println("runner: redirecting" + inputfile.getName() +inputfile.getPath());
 		pb.redirectInput(inputfile);
 		pb.redirectOutput(outputfile);
 		try

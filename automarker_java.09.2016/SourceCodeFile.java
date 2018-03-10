@@ -21,7 +21,6 @@ public class SourceCodeFile {
 	public static final int OUTPUT = 1; // Note, not used any more
 	public static final int EXTENSION = 2;
 	public static final int RUN = 3;
-	public static final int TIME_FACTOR = 4; // makes different programming languages have a more proper time limit.
 	
 	private String error = "";
 	private float executionTime = -1;
@@ -67,9 +66,9 @@ public class SourceCodeFile {
 				Element e = (Element) compilerStuff.item(0);
 				compilerStuff = e.getElementsByTagName("*");
 				
-				languageOptions = new String[(compilerStuff.getLength()) / 6][5];
+				languageOptions = new String[(compilerStuff.getLength()) / 5][4];
 				int count = 0;
-				for (int i = 0; i < compilerStuff.getLength(); i = i + 6) {
+				for (int i = 0; i < compilerStuff.getLength(); i = i + 5) {
 					e = (Element) compilerStuff.item(i);
 					
 					NodeList nodes = e.getElementsByTagName("*");
@@ -78,7 +77,6 @@ public class SourceCodeFile {
 					languageOptions[count][1] = nodes.item(1).getTextContent();
 					languageOptions[count][2] = nodes.item(2).getTextContent();
 					languageOptions[count][3] = nodes.item(3).getTextContent();
-					languageOptions[count][4] = nodes.item(4).getTextContent();
 					count++;
 				}
 			}
@@ -93,13 +91,10 @@ public class SourceCodeFile {
 	}
 	
 	public int compile() {
-		return compile(true, 0);
+		return compile(true);
 	}
-
-	public int compile(boolean firstTry) { return compile(firstTry, 0);}
-
-	public int compile(int verifier) { return compile(true, verifier);}
-	private int compile(boolean firstTry, int verifier) {
+	
+	private int compile(boolean firstTry) {
 		error = "";
 		if (programmingLanguage == -1)
 		{
@@ -109,7 +104,7 @@ public class SourceCodeFile {
 		// Clean up files in submission dir
 		// do this at the start so there's time to manually check the submissions if needed
 		File parentDir = submission.getParentFile();
-		if (parentDir.exists() && parentDir.isDirectory() && verifier == 0)
+		if (parentDir.exists() && parentDir.isDirectory())
 		{
 			for (String childName : parentDir.list())
 			{
@@ -120,7 +115,7 @@ public class SourceCodeFile {
 				}
 			}
 		}
-
+		
 		String inputExt = languageOptions[programmingLanguage][EXTENSION];
 		File renamedSubmission = new File(parentDir, problemName + inputExt);
 		boolean renameSuccessful = submission.renameTo(renamedSubmission);
@@ -152,9 +147,6 @@ public class SourceCodeFile {
 			process.waitFor();
 			
 			termination = process.exitValue();
-			if(termination == 1){
-				System.out.println(getError());
-			}
 		}
 		catch (IOException e) {
 			e.printStackTrace();
@@ -228,7 +220,7 @@ public class SourceCodeFile {
 		int priority = mainThread.getPriority();
 		
 		int exitValue = -2;
-		float newTimeLimit = timeLimit * Float.parseFloat(languageOptions[programmingLanguage][TIME_FACTOR]); // more variable time limit for different programming languages
+		
 		error = "";
 		String runCmd = languageOptions[programmingLanguage][RUN];
 		runCmd = runCmd.replace("basename.parent", submission.getParent().replace("\\", "/"));
@@ -247,7 +239,7 @@ public class SourceCodeFile {
 			
 			// wait for the program till it finishes or till the time limit is exceeded
 			// give some extra time for system overhead, checked later
-			srThread.join((int) ((1.2*newTimeLimit + 5) * 1000));
+			srThread.join((int) ((1.2*timeLimit + 5) * 1000));
 			 
 			// Close the process and give a little time to ensure it can finish
 			boolean overTimeLimit = srThread.isAlive();
@@ -271,7 +263,7 @@ public class SourceCodeFile {
 					+ executionTime + " overTimeLimit=" + overTimeLimit);
 			
 			// thread is given extra time, so check for actual execution time
-			if (executionTime > newTimeLimit || overTimeLimit)
+			if (executionTime > timeLimit || overTimeLimit)
 			{
 				exitValue = -2; // out of time
 			}
@@ -299,7 +291,7 @@ public class SourceCodeFile {
 	}
 	
 	// finds the programming language used by looking at the extension
-	protected int evalProgrammingLanguage(String filename) {
+	private int evalProgrammingLanguage(String filename) {
 		int extPos = filename.lastIndexOf('.');
 		if (extPos == -1)
 		{
