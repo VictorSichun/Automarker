@@ -1,3 +1,4 @@
+
 import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
@@ -12,6 +13,10 @@ public class SubmissionWorker implements Runnable
 	
 	private Queue<Integer> submissionBuffer;
 	private boolean doLoop;
+	private static final long MAX_FILE_SIZE = 3000;
+	private final int TXTFILE = -1;
+	private final String VERIFIER_ERROR_MESSAGE = "Please contact with administrator";
+	private static long lastModified = 0;
 	
 	public SubmissionWorker(Queue<Integer> buffer)
 	{
@@ -74,7 +79,7 @@ public class SubmissionWorker implements Runnable
 						sql.setInt(1, StatusCodes.InProgress.ordinal());
 						sql.setInt(2, id);
 						sql.setInt(3, StatusCodes.InQueue.ordinal());
-						int rowsModified = sql.executeUpdate();
+						int rowsModified = sql.executeUpdate();//An int that indicates the number of rows affected, or 0 if using a DDL statement.
 						sql.close();
 						
 						if (rowsModified == 0)
@@ -124,7 +129,6 @@ public class SubmissionWorker implements Runnable
 					// get relevant information about this submission
 					// make sure the information is the latest available
 					Settings settings = Settings.getSettings(assignmentId, true);
-					
 					// if there are no input/output files, assume this means marking is not required
 					if (!settings.hasInputOutputFiles(problemId))
 					{
@@ -161,6 +165,9 @@ public class SubmissionWorker implements Runnable
 						throw new InternalWorkerException("worker: error copying '"
 								+ submissionPath + "' to '" + workingPath + "'");
 					}
+
+
+
 					
 					// change status to in progress
 					updateStatus(id, StatusCodes.InProgress);
@@ -186,98 +193,149 @@ public class SubmissionWorker implements Runnable
 					
 					// compile
 					SourceCodeFile scf = new SourceCodeFile(workingPath, problemName);
-					
 					System.out.println("worker: compiling submission " + id);
-					
-					int compileStatus = scf.compile();
-					if (compileStatus == -1)
-					{
-						// couldn't recognise language
-						updateExtraInformation(id, "Unknown programming language.");
-						throw new InternalWorkerException(
-								"worker: unrecognised language for submission " + id, StatusCodes.Other);
-					}
-					else if (compileStatus == -2)
-					{
-						// couldn't copy file - out of space, etc.
-						// internal error, so leave the file for next round
-						throw new InternalWorkerException(
-								"worker: could not copy file while compiling for submission " + id);
-					}
-					else if (compileStatus != 0)
-					{
-						// compiler returned error
-						// set variables and skip rest
-						extraInformation = scf.getError();
+					// limit the source file size under 3000 bytes.
+					if (submissionFile.length() > MAX_FILE_SIZE) {
+						updateExtraInformation(id,"Source file size exceeded.");
 						statusCode = StatusCodes.CompilerError;
-					}
-					else
-					{
-						// run
-						File output = new File(settings.getWorkingDir(),
-								settings.getProblemName(problemId) + ".out");
-						File input = new File(settings.getInputFilePath(problemId));
-						
-						System.out.println("worker: executing submission " + id);
-						
-						int executeStatus = scf.execute(output, input,
-								settings.getTimeLimit(problemId));
-						executionTime = scf.getExecTime();
-						// System.out.println("worker: time " + executionTime);
-						
-						if (executeStatus != 0)
-						{
-							// run time error
+
+					}else{
+
+						int compileStatus = scf.compile();
+						if (compileStatus == -1) {
+							// couldn't recognise language
+							updateExtraInformation(id, "Unknown programming language.");
+							throw new InternalWorkerException(
+									"worker: unrecognised language for submission " + id, StatusCodes.Other);
+						} else if (compileStatus == -2) {
+							// couldn't copy file - out of space, etc.
+							// internal error, so leave the file for next round
+							throw new InternalWorkerException(
+									"worker: could not copy file while compiling for submission " + id);
+						} else if (compileStatus != 0) {
+							// compiler returned error
+							// set variables and skip rest
 							extraInformation = scf.getError();
-							statusCode = StatusCodes.RunTimeError; // but may be time limit
-						}
-						if (executeStatus == -2)
-						{
-							// out of time
-							statusCode = StatusCodes.TimeLimitExceeded;
-						}
-						else if (executeStatus == 0)
-						{
-							// compare output
-							File solution = new File(settings.getOutputFilePath(problemId));
-							statusCode = CongruentComparator.compare(output, solution);
+							statusCode = StatusCodes.CompilerError;
+						} else {
+							// run
+							File output = new File(settings.getWorkingDir(),
+									settings.getProblemName(problemId) + ".out");
 
-							if (statusCode == StatusCodes.WrongAnswer)
-						    {	
-    						  	if (CongruentComparator.diffpercent > 0)
-    							{
-    								extraInformation = "Output lines correct = " + CongruentComparator.diffpercent + "%\n";
-    							}
-								else if (CongruentComparator.diffpercent == -1)
-								{
-    								extraInformation = "Number of output lines not as expected.\n";
-								}
-								//else
-								//{
-    							//	extraInformation = "Totally wrong\n";
-								//}
-							}
-
-							
-							if (output.length() < 1000000) // about a meg max size to store output
-							{
-							    // save the output file
-								File store = new File(settings.getOutputStoreDir(), submissionName
-									+ "+" + problemName + ".out");
-								try
-								{
-									Server.copyFile(output, store);
+							// check read file method flag, copy the input file into working directory if the method was enabled
+							File input = new File(settings.getInputFilePath(problemId));
+							if(settings.getReadFileFlag(problemId) == 1){
+								// constructing destination for copying
+								String inputFileWorkingPath = String.format("%s/%s", settings.getWorkingDir(), input.getName());
+								File inputFile = new File(inputFileWorkingPath);
+								System.out.println("worker: read file flag enabled, copying input file to working directory...");
+								try{
+									Server.copyFile(input, inputFile);
+									input = inputFile;
 								}
 								catch (IOException e)
 								{
-									// non critical internal error
-									System.out.println("worker: error copying '" + output.getPath()
-										+ "' to '" + store.getPath() + "'");
+									// internal error
+									throw new InternalWorkerException("worker: error copying '"
+											+ input.getPath() + "' to '" + inputFileWorkingPath + "'");
+								}
+							}
+
+
+							System.out.println("worker: executing submission " + id);
+
+							int executeStatus = scf.execute(output, input,
+									settings.getTimeLimit(problemId));
+							executionTime = scf.getExecTime();
+							// System.out.println("worker: time " + executionTime);
+
+							if (executeStatus != 0) {
+								// run time error
+								extraInformation = scf.getError();
+								statusCode = StatusCodes.RunTimeError; // but may be time limit
+							}
+							if (executeStatus == -2) {
+								// out of time
+								statusCode = StatusCodes.TimeLimitExceeded;
+							} else if (executeStatus == 0) {
+								// compare output
+								File solution = new File(settings.getOutputFilePath(problemId));
+								// checking if the solution file is a txt file or a verifier
+								int language = scf.evalProgrammingLanguage(solution.getName());
+								// solution file is a txt file, then we do comparison
+								if(language == TXTFILE) {
+									statusCode = CongruentComparator.compare(output, solution);
+									if (statusCode == StatusCodes.WrongAnswer) {
+										if (CongruentComparator.diffpercent > 0) {
+											extraInformation = "Output lines correct = " + CongruentComparator.diffpercent + "%\n";
+
+										} else if (CongruentComparator.diffpercent == -1) {
+											extraInformation = "Number of output lines not as expected.\n";
+										}
+										//else
+										//{
+										//	extraInformation = "Totally wrong\n";
+										//}
+									}
+								}else{
+									// otherwise, the solution file is a verifier
+									// first check if the verifier has been modified
+									int verifierStatus = 0;
+									if(lastModified < solution.lastModified()) {
+										lastModified = solution.lastModified();
+										// if true, then compile verifier; otherwise, the verifier does not need to be compiled again
+										SourceCodeFile scfForVerifier = new SourceCodeFile(solution.getPath(), problemName);
+										System.out.println("worker: compiling the verifier...");
+										verifierStatus = scfForVerifier.compile(1);
+										System.out.println("worker: compilation completes, verifier status code" + verifierStatus);
+									}
+									if(verifierStatus == 0) {
+										int exitValue = -1;
+										SubmissionVerifier sv = new SubmissionVerifier(solution, input, output);
+										exitValue = sv.verify(language);
+										if (exitValue == 0) {
+											System.out.println("verifier: the answer seems okay!");
+											statusCode = StatusCodes.Correct;
+										} else if (exitValue == 1) {
+											// some lines are bad
+											sv.close();
+											if (sv.getError().equals("")) {
+												System.out.println("verifier: answers are not correct!");
+												statusCode = StatusCodes.WrongAnswer;
+												extraInformation = sv.getResult();
+											} else {
+												System.out.println("verifier: I got something wrong");
+												statusCode = StatusCodes.Other;
+												extraInformation = VERIFIER_ERROR_MESSAGE;
+											}
+										} else {
+											System.out.println("verifier: something goes wrong with SubmissionVerifier class");
+											statusCode = StatusCodes.Other;
+											extraInformation = VERIFIER_ERROR_MESSAGE;
+										}
+									}else{
+										System.out.println("verifier: error occurs while compiling");
+										statusCode = StatusCodes.Other;
+										extraInformation = VERIFIER_ERROR_MESSAGE;
+									}
+								}
+
+								if (output.length() < 1000000) // about a meg max size to store output
+								{
+									// save the output file
+									File store = new File(settings.getOutputStoreDir(), submissionName
+											+ "+" + problemName + ".out");
+									try {
+										Server.copyFile(output, store);
+									} catch (IOException e) {
+										// non critical internal error
+										System.out.println("worker: error copying '" + output.getPath()
+												+ "' to '" + store.getPath() + "'");
+									}
 								}
 							}
 						}
 					}
-					
 					// update database with completed information
 					try (
 							Connection conn = DbConnection.getConnection();
@@ -290,7 +348,12 @@ public class SubmissionWorker implements Runnable
 						
 						if (extraInformation != null)
 						{
-							updateExtraInformation(id, extraInformation.substring(0,99)); // mjd guess Sept26, 2016
+							if(extraInformation.length() > 99)
+							{
+								updateExtraInformation(id, extraInformation.substring(0,99)); // mjd guess Sept26, 2016
+							}else{
+								updateExtraInformation(id, extraInformation);
+							}
 						}
 						
 						if (executionTime >= 0)
@@ -413,6 +476,7 @@ public class SubmissionWorker implements Runnable
 			e.printStackTrace();
 		}
 	}
+
 	
 	// dummy class for processing all status codes correctly
 	private class InternalWorkerException extends Exception

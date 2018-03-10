@@ -18,7 +18,6 @@ public class Settings
 	private static final String SUBMISSIONS_DIR = "submissions";
 	private static final String WORKING_DIR = "working";
 	private static final String OUTPUT_STORE_DIR = "output";
-	
 	private static final String COMPARATOR = "CongruentComparator";
 	
 	private static Map<Integer, Settings> settingsCache = null;
@@ -28,7 +27,7 @@ public class Settings
 	private String courseFullname = "";
 	private int assignmentNumber = -1;
 	private java.util.Date startTime = new java.util.Date();
-	private java.util.Date endTime = new java.util.Date();
+	private java.util.Date endTime = null;
 	
 	private Map<Integer, ProblemInformation> problems;
 	
@@ -47,15 +46,16 @@ public class Settings
 		if (settingsCache.containsKey(id))
 		{
 			Settings s = settingsCache.get(id);
+			System.out.print('0');
 			
 			if (forceUpdate)
 			{
 				s.update();
 			}
-			
+			System.out.print('1');
 			return s;
 		}
-		
+		System.out.print('2');
 		return new Settings(id);
 	}
 	
@@ -75,8 +75,8 @@ public class Settings
 		
 		try (Connection conn = DbConnection.getConnection(); )
 		{
-			PreparedStatement sql;
-			ResultSet rs;
+			PreparedStatement sql, sql2;
+			ResultSet rs, rs2;
 			
 			// get assignment details
 			sql = conn.prepareStatement(
@@ -84,20 +84,32 @@ public class Settings
 					"from am_assignments join am_courses using (course_id) " +
 					"where assignment_id = ?");
 			sql.setInt(1, assignmentId);
-			
+
+
 			rs = sql.executeQuery();
+
+			sql2 = conn.prepareStatement("select top 1 new_end_time from am_userextensions where assignment_id = ? order by new_end_time desc");
+			sql2.setInt(1, assignmentId);
+
+			rs2 = sql2.executeQuery();
+
+			if(rs2.next()){
+				endTime = rs2.getTimestamp("new_end_time");
+			}
 			if (rs.next()) // there will only be a maximum of 1 result
 			{
 				courseFullname = rs.getString("course_fullname");
 				assignmentNumber = rs.getInt("assignment_number");
 				startTime = rs.getTimestamp("start_time");
-				endTime = rs.getTimestamp("end_time");
+				if(endTime == null) {
+					endTime = rs.getTimestamp("end_time");
+				}
 			}
 			else
 			{
 				throw new IllegalArgumentException("Invalid assignment id.");
 			}
-			try { sql.close(); } catch (SQLException ignoredException) {}
+			try { sql.close(); sql2.close(); } catch (SQLException ignoredException) {}
 			
 			// get problem details
 			sql = conn.prepareStatement("select * from am_problems where assignment_id = ?");
@@ -113,7 +125,8 @@ public class Settings
 						rs.getInt("problem_timelimit"),
 						COMPARATOR, // for backwards compatibility
 						rs.getString("problem_input"),
-						rs.getString("problem_output")
+						rs.getString("problem_output"),
+						rs.getInt("problem_readfileflag")
 						));
 			}
 			try { sql.close(); } catch (SQLException ignoredException) {}
@@ -121,9 +134,10 @@ public class Settings
 		catch (SQLException e)
 		{
 			e.printStackTrace();
+			System.out.print("false");
 			return false;
 		}
-		
+		System.out.print("true");
 		return true;
 	}
 	
@@ -170,6 +184,11 @@ public class Settings
 	public int getTimeLimit(int problem)
 	{
 		return problems.containsKey(problem) ? problems.get(problem).getTimeLimit() : -1;
+	}
+
+	public int getReadFileFlag(int problem)
+	{
+		return problems.containsKey(problem) ? problems.get(problem).getReadFileFlag() : -1;
 	}
 	
 	public String getComparator(int problem)
@@ -232,9 +251,10 @@ public class Settings
 		private String comparator = "";
 		private String input = "";
 		private String output = "";
+		private int readFileFlag = -1;
 		
 		public ProblemInformation(int id, String name, int timeLimit, String comparator,
-				String input, String output)
+				String input, String output, int readFileFlag)
 		{
 			problemId = id;
 			this.name = name;
@@ -242,6 +262,7 @@ public class Settings
 			this.comparator = comparator;
 			this.input = input;
 			this.output = output;
+			this.readFileFlag = readFileFlag;
 		}
 		
 		public int getProblemId()
@@ -273,5 +294,7 @@ public class Settings
 		{
 			return output;
 		}
+
+		public int getReadFileFlag() { return readFileFlag; }
 	}
 }

@@ -177,8 +177,7 @@ public class Server implements ServerInterface
 				PreparedStatement sql = conn.prepareStatement(
 						"select assignment_id, " +
 						"concat(course_fullname, '.', assignment_number) as name " +
-						"from am_assignments join am_courses using (course_id) " +
-						"where (start_time <= now() and end_time > now()) " +
+						"from am_assignments join am_courses using (course_id) where (start_time <= now() and (end_time > now() or exists(select * from am_userextensions where assignment_id = am_assignments.assignment_id and new_end_time >= now()))order by name) " +
 						buildStartedAssignmentString()); )
 		{
 			List<String> results = new ArrayList<String>();
@@ -395,17 +394,19 @@ public class Server implements ServerInterface
 					// get a list of currently running assignments (10 min buffer)
 					sql = conn.prepareStatement(
 							"select assignment_id from am_assignments " +
-							"where (start_time <= now() and end_time > subtime(now(), sec_to_time(600))) " +
+							"where (start_time <= now() and (end_time > subtime(now(), sec_to_time(600)) or exists(select * from am_userextensions where assignment_id = am_assignments.assignment_id and new_end_time > subtime(now(), sec_to_time(600))))) " +
 							buildStartedAssignmentString());
 					
 					ResultSet rs1 = sql.executeQuery();
+					int i = 0;
 					while (rs1.next())
 					{
 						int aid = rs1.getInt("assignment_id");
 						if (!stoppedAssignments.contains(aid))
 							assignmentsToRun.add(aid);
+						i++;
 					}
-					
+					System.out.print(i);
 					sql.close();
 					
 					// only run if there are assignments
@@ -477,9 +478,9 @@ public class Server implements ServerInterface
 							System.out.println("returned " + syncResult);
 							
 							// add to proper buffer
-							for (Integer i : localBuffer)
+							for (Integer x : localBuffer)
 							{
-								submissionBuffer.offer(i);
+								submissionBuffer.offer(x);
 							}
 						}
 					}
